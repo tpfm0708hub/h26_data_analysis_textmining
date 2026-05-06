@@ -1,5 +1,6 @@
 import os
 import sys
+import importlib.util
 
 import pandas as pd
 import streamlit as st
@@ -7,21 +8,66 @@ from matplotlib import font_manager, rc
 
 
 # =========================================================
-# 0. 사용자 정의 모듈 경로 설정
+# 0. 기본 경로 설정
 # =========================================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MYLIB_DIR = os.path.join(BASE_DIR, "mylib")
 
-if MYLIB_DIR not in sys.path:
-    sys.path.append(MYLIB_DIR)
 
+# =========================================================
+# 1. 숫자로 시작하는 파일명을 모듈로 불러오기 위한 함수
+# =========================================================
+def load_module_from_path(module_alias, file_path):
+    """
+    파일명이 숫자로 시작하는 Python 파일은 일반 import 문으로 불러올 수 없습니다.
 
-from myTextAnalyzer import parse_stopwords, run_text_analysis
-from myStramlitVisualizer import draw_hbar, draw_wordcloud, fig_to_png_bytes
+    예:
+    from 260506_myTextAnalyzer import ...
+
+    위 문법은 불가능하므로 importlib.util을 사용하여
+    파일 경로 기준으로 모듈을 불러옵니다.
+    """
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"모듈 파일을 찾을 수 없습니다: {file_path}")
+
+    spec = importlib.util.spec_from_file_location(module_alias, file_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    return module
 
 
 # =========================================================
-# 1. Streamlit 기본 설정
+# 2. 사용자 정의 모듈 로딩
+# =========================================================
+TEXT_ANALYZER_PATH = os.path.join(MYLIB_DIR, "260506_myTextAnalyzer.py")
+VISUALIZER_PATH = os.path.join(MYLIB_DIR, "260506_myStramlitVisualizer.py")
+
+myTextAnalyzer = load_module_from_path(
+    module_alias="myTextAnalyzer_260506",
+    file_path=TEXT_ANALYZER_PATH
+)
+
+myVisualizer = load_module_from_path(
+    module_alias="myStramlitVisualizer_260506",
+    file_path=VISUALIZER_PATH
+)
+
+
+# =========================================================
+# 3. 모듈 내 함수 연결
+# =========================================================
+parse_stopwords = myTextAnalyzer.parse_stopwords
+parse_replace_rules = myTextAnalyzer.parse_replace_rules
+run_text_analysis = myTextAnalyzer.run_text_analysis
+
+draw_hbar = myVisualizer.draw_hbar
+draw_wordcloud = myVisualizer.draw_wordcloud
+fig_to_png_bytes = myVisualizer.fig_to_png_bytes
+
+
+# =========================================================
+# 4. Streamlit 기본 설정
 # =========================================================
 st.set_page_config(
     page_title="형태소 빈도분석 대시보드",
@@ -31,13 +77,13 @@ st.set_page_config(
 
 
 # =========================================================
-# 2. 기본 과제 데이터 경로 설정
+# 5. 기본 데이터 경로 설정
 # =========================================================
 DEFAULT_DATA_PATH = r"D:\Lecture\TextMining26\data\daum_movie_review.csv"
 
 
 # =========================================================
-# 3. 한글 폰트 설정
+# 6. 한글 폰트 설정
 # =========================================================
 FONT_PATH = "c:/Windows/Fonts/malgun.ttf"
 
@@ -47,7 +93,7 @@ if os.path.exists(FONT_PATH):
 
 
 # =========================================================
-# 4. 캐시 적용: 기본 CSV 파일 읽기
+# 7. 캐시 적용: 기본 CSV 파일 읽기
 # =========================================================
 @st.cache_data(show_spinner=False)
 def load_default_file(file_path):
@@ -63,7 +109,7 @@ def load_default_file(file_path):
 
 
 # =========================================================
-# 5. 캐시 적용: 업로드 파일 읽기
+# 8. 캐시 적용: 업로드 파일 읽기
 # =========================================================
 @st.cache_data(show_spinner=False)
 def load_uploaded_file(uploaded_file_name, uploaded_file_bytes):
@@ -92,7 +138,7 @@ def load_uploaded_file(uploaded_file_name, uploaded_file_bytes):
 
 
 # =========================================================
-# 6. 캐시 적용: 형태소 분석 실행
+# 9. 캐시 적용: 형태소 분석 실행
 # =========================================================
 @st.cache_data(show_spinner=True)
 def cached_text_analysis(
@@ -101,6 +147,7 @@ def cached_text_analysis(
     analyzer_name,
     selected_pos_kor,
     stop_words,
+    replace_dict,
     min_len,
     top_n,
 ):
@@ -113,13 +160,14 @@ def cached_text_analysis(
         analyzer_name=analyzer_name,
         selected_pos_kor=selected_pos_kor,
         stop_words=stop_words,
+        replace_dict=replace_dict,
         min_len=min_len,
         top_n=top_n,
     )
 
 
 # =========================================================
-# 7. 제목 영역
+# 10. 제목 영역
 # =========================================================
 st.title("📊 한국어 형태소 빈도분석 대시보드")
 
@@ -132,7 +180,7 @@ st.write(
 
 
 # =========================================================
-# 8. 사이드바: 데이터 선택 방식
+# 11. 사이드바: 데이터 선택 방식
 # =========================================================
 st.sidebar.header("1. 데이터 선택")
 
@@ -147,7 +195,7 @@ data_source = st.sidebar.radio(
 
 
 # =========================================================
-# 9. 기본 데이터 또는 업로드 데이터 불러오기
+# 12. 기본 데이터 또는 업로드 데이터 불러오기
 # =========================================================
 if data_source == "기본 데이터 사용":
 
@@ -163,7 +211,6 @@ if data_source == "기본 데이터 사용":
     except Exception as e:
         st.error(f"기본 데이터 파일을 불러오는 중 오류가 발생했습니다: {e}")
         st.stop()
-
 
 else:
     uploaded_file = st.sidebar.file_uploader(
@@ -189,13 +236,12 @@ else:
 
 
 # =========================================================
-# 10. 사이드바: 분석 열 선택
+# 13. 사이드바: 분석 열 선택
 # =========================================================
 st.sidebar.header("2. 분석 열 선택")
 
 all_columns = df.columns.tolist()
 
-# review 열이 있으면 기본값으로 선택합니다.
 default_columns = ["review"] if "review" in all_columns else []
 
 selected_columns = st.sidebar.multiselect(
@@ -212,7 +258,7 @@ if not selected_columns:
 
 
 # =========================================================
-# 11. 사이드바: 형태소 분석기 및 분석 조건
+# 14. 사이드바: 형태소 분석기 및 분석 조건
 # =========================================================
 st.sidebar.header("3. 분석 조건")
 
@@ -223,10 +269,6 @@ analyzer_name = st.sidebar.radio(
     help="konlpy-Okt가 실행되지 않는 환경에서는 kiwipiepy 사용을 권장합니다."
 )
 
-
-# ---------------------------------------------------------
-# 빈도표 출력 단어 수
-# ---------------------------------------------------------
 top_n = st.sidebar.slider(
     "빈도표 출력 단어 수",
     min_value=5,
@@ -235,10 +277,6 @@ top_n = st.sidebar.slider(
     step=5
 )
 
-
-# ---------------------------------------------------------
-# 막대그래프 표시 단어 수
-# ---------------------------------------------------------
 bar_top_n = st.sidebar.slider(
     "막대그래프 표시 단어 수",
     min_value=5,
@@ -247,12 +285,6 @@ bar_top_n = st.sidebar.slider(
     step=5
 )
 
-
-# ---------------------------------------------------------
-# 최소 글자 수
-# ---------------------------------------------------------
-# 형태소 분석에서는 1글자, 2글자, 3글자 단위 조정이 자연스럽습니다.
-# 따라서 실제 분석 편의성을 위해 step=1을 적용합니다.
 min_len = st.sidebar.slider(
     "최소 글자 수",
     min_value=1,
@@ -264,7 +296,7 @@ min_len = st.sidebar.slider(
 
 
 # =========================================================
-# 12. 메인 화면: 데이터 미리보기
+# 15. 메인 화면: 데이터 미리보기
 # =========================================================
 st.subheader("1. 데이터 미리보기")
 
@@ -286,7 +318,7 @@ st.dataframe(df.head(10), use_container_width=True)
 
 
 # =========================================================
-# 13. 메인 화면: 품사 선택
+# 16. 메인 화면: 품사 선택
 # =========================================================
 st.subheader("2. 분석 품사 선택")
 
@@ -320,7 +352,7 @@ if not selected_pos_kor:
 
 
 # =========================================================
-# 14. 메인 화면: 불용어 입력
+# 17. 메인 화면: 불용어 입력
 # =========================================================
 st.subheader("3. 불용어 입력")
 
@@ -339,9 +371,38 @@ st.write(stop_words)
 
 
 # =========================================================
-# 15. 형태소 분석 실행 버튼
+# 18. 메인 화면: 변환어 규칙 입력
 # =========================================================
-st.subheader("4. 형태소 분석 실행")
+st.subheader("4. 변환어 규칙 입력")
+
+default_replace_rules = """재밌다=재미있다
+재미있다=재미있다
+봤다=보다
+봤어요=보다
+영화관=극장"""
+
+replace_rule_text = st.text_area(
+    "변환어 규칙을 입력해주세요. 예: 재밌다=재미있다 / 봤다=보다 / 영화관=극장",
+    value=default_replace_rules,
+    height=140
+)
+
+replace_dict = parse_replace_rules(replace_rule_text, max_rules=100)
+
+st.caption(f"현재 반영된 변환어 규칙 수: {len(replace_dict)}개")
+
+replace_rule_df = pd.DataFrame(
+    list(replace_dict.items()),
+    columns=["변환 전", "변환 후"]
+)
+
+st.dataframe(replace_rule_df, use_container_width=True)
+
+
+# =========================================================
+# 19. 형태소 분석 실행 버튼
+# =========================================================
+st.subheader("5. 형태소 분석 실행")
 
 run_btn = st.button("형태소 분석 실행", type="primary")
 
@@ -351,7 +412,7 @@ if not run_btn:
 
 
 # =========================================================
-# 16. 형태소 분석 실행
+# 20. 형태소 분석 실행
 # =========================================================
 try:
     with st.spinner("형태소 분석을 진행하고 있습니다."):
@@ -361,6 +422,7 @@ try:
             analyzer_name=analyzer_name,
             selected_pos_kor=selected_pos_kor,
             stop_words=stop_words,
+            replace_dict=replace_dict,
             min_len=min_len,
             top_n=top_n,
         )
@@ -378,9 +440,9 @@ unique_token_count = analysis_result["unique_token_count"]
 
 
 # =========================================================
-# 17. 분석 요약
+# 21. 분석 요약
 # =========================================================
-st.subheader("5. 분석 요약")
+st.subheader("6. 분석 요약")
 
 sum_col1, sum_col2, sum_col3, sum_col4 = st.columns(4)
 
@@ -398,9 +460,9 @@ with sum_col4:
 
 
 # =========================================================
-# 18. 빈도분석 결과표
+# 22. 빈도분석 결과표
 # =========================================================
-st.subheader("6. 형태소 빈도분석 결과")
+st.subheader("7. 형태소 빈도분석 결과")
 
 if freq_df.empty:
     st.warning("분석 결과가 비어 있습니다. 불용어, 품사, 최소 글자 수 조건을 조정해주세요.")
@@ -419,16 +481,13 @@ st.download_button(
 
 
 # =========================================================
-# 19. 시각화 출력 및 이미지 다운로드
+# 23. 시각화 출력 및 이미지 다운로드
 # =========================================================
-st.subheader("7. 시각화 결과")
+st.subheader("8. 시각화 결과")
 
 tab1, tab2 = st.tabs(["수평 막대그래프", "워드클라우드"])
 
 
-# ---------------------------------------------------------
-# 19-1. 수평 막대그래프
-# ---------------------------------------------------------
 with tab1:
     fig_bar = draw_hbar(
         freq_df=freq_df,
@@ -448,9 +507,6 @@ with tab1:
     )
 
 
-# ---------------------------------------------------------
-# 19-2. 워드클라우드
-# ---------------------------------------------------------
 with tab2:
     if not os.path.exists(FONT_PATH):
         st.error("한글 폰트 파일을 찾을 수 없습니다. FONT_PATH를 확인해주세요.")
@@ -475,9 +531,9 @@ with tab2:
 
 
 # =========================================================
-# 20. 토큰화 결과 데이터 확인
+# 24. 토큰화 결과 데이터 확인
 # =========================================================
-st.subheader("8. 토큰화 결과 데이터")
+st.subheader("9. 토큰화 결과 데이터")
 
 show_cols = selected_columns + ["분석대상텍스트", "tokens"]
 
