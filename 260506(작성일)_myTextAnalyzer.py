@@ -30,7 +30,9 @@ def parse_stopwords(stopword_text, max_words=50):
 
     입력 예시:
     정말, 진짜, 그냥
+
     또는
+
     정말
     진짜
     그냥
@@ -45,14 +47,102 @@ def parse_stopwords(stopword_text, max_words=50):
 
     for word in raw_words:
         word = word.strip()
+
         if word and word not in stop_words:
             stop_words.append(word)
 
-    return stop_words[:max_words]
+        if len(stop_words) >= max_words:
+            break
+
+    return stop_words
 
 
 # =========================================================
-# 3. 품사 선택값 변환
+# 3. 변환어 규칙 처리 함수
+# =========================================================
+def parse_replace_rules(replace_rule_text, max_rules=100):
+    """
+    사용자가 입력한 변환어 규칙을 딕셔너리로 변환합니다.
+
+    입력 예시 1:
+    재밌다=재미있다
+    봤다=보다
+    영화관=극장
+
+    입력 예시 2:
+    재밌다=재미있다, 봤다=보다, 영화관=극장
+
+    반환 예시:
+    {
+        "재밌다": "재미있다",
+        "봤다": "보다",
+        "영화관": "극장"
+    }
+    """
+    if replace_rule_text is None:
+        return {}
+
+    replace_rule_text = str(replace_rule_text).strip()
+
+    if replace_rule_text == "":
+        return {}
+
+    # 줄바꿈 또는 쉼표 기준으로 규칙 분리
+    raw_rules = re.split(r"[,\n\r]+", replace_rule_text)
+
+    replace_dict = {}
+
+    for rule in raw_rules:
+        rule = rule.strip()
+
+        if not rule:
+            continue
+
+        # '='가 없는 규칙은 무시
+        if "=" not in rule:
+            continue
+
+        before, after = rule.split("=", 1)
+
+        before = before.strip()
+        after = after.strip()
+
+        if before and after:
+            replace_dict[before] = after
+
+        if len(replace_dict) >= max_rules:
+            break
+
+    return replace_dict
+
+
+# =========================================================
+# 4. 변환어 규칙 적용 함수
+# =========================================================
+def apply_replace_rules(tokens, replace_dict):
+    """
+    형태소 분석 후 추출된 토큰 리스트에 변환어 규칙을 적용합니다.
+
+    예:
+    tokens = ['재밌다', '영화', '봤다']
+    replace_dict = {'재밌다': '재미있다', '봤다': '보다'}
+
+    결과:
+    ['재미있다', '영화', '보다']
+    """
+    if not replace_dict:
+        return tokens
+
+    replaced_tokens = [
+        replace_dict.get(token, token)
+        for token in tokens
+    ]
+
+    return replaced_tokens
+
+
+# =========================================================
+# 5. Okt 품사 변환 함수
 # =========================================================
 def get_okt_pos_list(selected_pos_kor):
     """
@@ -67,6 +157,9 @@ def get_okt_pos_list(selected_pos_kor):
     return [pos_map[pos] for pos in selected_pos_kor if pos in pos_map]
 
 
+# =========================================================
+# 6. Kiwi 품사 변환 함수
+# =========================================================
 def get_kiwi_pos_list(selected_pos_kor):
     """
     화면에서 선택한 한국어 품사명을 Kiwi 품사 태그로 변환합니다.
@@ -85,6 +178,7 @@ def get_kiwi_pos_list(selected_pos_kor):
     }
 
     result = []
+
     for pos in selected_pos_kor:
         result.extend(pos_map.get(pos, []))
 
@@ -92,18 +186,36 @@ def get_kiwi_pos_list(selected_pos_kor):
 
 
 # =========================================================
-# 4. Okt 형태소 분석
+# 7. Okt 형태소 분석 함수
 # =========================================================
-def analyze_with_okt(texts, selected_pos_kor, stop_words=None, min_len=2, stem=True):
+def analyze_with_okt(
+    texts,
+    selected_pos_kor,
+    stop_words=None,
+    replace_dict=None,
+    min_len=2,
+    stem=True
+):
     """
-    Okt를 이용해 형태소 분석을 수행합니다.
+    konlpy의 Okt를 이용해 형태소 분석을 수행합니다.
+
+    처리 순서:
+    1. 한글 정제
+    2. Okt 형태소 분석
+    3. 품사 필터링
+    4. 최소 글자 수 필터링
+    5. 변환어 규칙 적용
+    6. 불용어 제거
     """
     from konlpy.tag import Okt
 
     stop_words = stop_words or []
+    replace_dict = replace_dict or {}
+
     okt_pos_list = get_okt_pos_list(selected_pos_kor)
 
     tokenizer = Okt()
+
     all_tokens = []
     row_tokens = []
 
@@ -116,7 +228,17 @@ def analyze_with_okt(texts, selected_pos_kor, stop_words=None, min_len=2, stem=T
             word
             for word, tag in tagged_tokens
             if tag in okt_pos_list
-            and word not in stop_words
+            and len(word) >= min_len
+        ]
+
+        # 변환어 규칙 적용
+        tokens = apply_replace_rules(tokens, replace_dict)
+
+        # 변환 이후 불용어 제거
+        tokens = [
+            word
+            for word in tokens
+            if word not in stop_words
             and len(word) >= min_len
         ]
 
@@ -127,18 +249,35 @@ def analyze_with_okt(texts, selected_pos_kor, stop_words=None, min_len=2, stem=T
 
 
 # =========================================================
-# 5. Kiwi 형태소 분석
+# 8. Kiwi 형태소 분석 함수
 # =========================================================
-def analyze_with_kiwi(texts, selected_pos_kor, stop_words=None, min_len=2):
+def analyze_with_kiwi(
+    texts,
+    selected_pos_kor,
+    stop_words=None,
+    replace_dict=None,
+    min_len=2
+):
     """
     kiwipiepy를 이용해 형태소 분석을 수행합니다.
+
+    처리 순서:
+    1. 한글 정제
+    2. Kiwi 형태소 분석
+    3. 품사 필터링
+    4. 최소 글자 수 필터링
+    5. 변환어 규칙 적용
+    6. 불용어 제거
     """
     from kiwipiepy import Kiwi
 
     stop_words = stop_words or []
+    replace_dict = replace_dict or {}
+
     kiwi_pos_list = get_kiwi_pos_list(selected_pos_kor)
 
     kiwi = Kiwi()
+
     all_tokens = []
     row_tokens = []
 
@@ -151,8 +290,18 @@ def analyze_with_kiwi(texts, selected_pos_kor, stop_words=None, min_len=2):
             token.form
             for token in tagged_tokens
             if token.tag in kiwi_pos_list
-            and token.form not in stop_words
             and len(token.form) >= min_len
+        ]
+
+        # 변환어 규칙 적용
+        tokens = apply_replace_rules(tokens, replace_dict)
+
+        # 변환 이후 불용어 제거
+        tokens = [
+            word
+            for word in tokens
+            if word not in stop_words
+            and len(word) >= min_len
         ]
 
         row_tokens.append(tokens)
@@ -162,7 +311,7 @@ def analyze_with_kiwi(texts, selected_pos_kor, stop_words=None, min_len=2):
 
 
 # =========================================================
-# 6. 선택 열 결합
+# 9. 선택 열 결합 함수
 # =========================================================
 def make_text_series(df, selected_columns):
     """
@@ -182,7 +331,7 @@ def make_text_series(df, selected_columns):
 
 
 # =========================================================
-# 7. 형태소 분석 통합 실행 함수
+# 10. 형태소 분석 통합 실행 함수
 # =========================================================
 def run_text_analysis(
     df,
@@ -190,15 +339,17 @@ def run_text_analysis(
     analyzer_name="kiwipiepy",
     selected_pos_kor=None,
     stop_words=None,
+    replace_dict=None,
     min_len=2,
     top_n=50,
 ):
     """
-    데이터프레임의 선택 열에 대해 형태소 분석을 수행하고
-    빈도분석 결과 데이터프레임을 반환합니다.
+    데이터프레임의 선택 열에 대해 형태소 분석을 수행하고,
+    빈도분석 결과 데이터프레임과 토큰화 결과를 반환합니다.
     """
     selected_pos_kor = selected_pos_kor or ["명사"]
     stop_words = stop_words or []
+    replace_dict = replace_dict or {}
 
     texts = make_text_series(df, selected_columns)
 
@@ -207,6 +358,7 @@ def run_text_analysis(
             texts=texts,
             selected_pos_kor=selected_pos_kor,
             stop_words=stop_words,
+            replace_dict=replace_dict,
             min_len=min_len,
             stem=True,
         )
@@ -216,6 +368,7 @@ def run_text_analysis(
             texts=texts,
             selected_pos_kor=selected_pos_kor,
             stop_words=stop_words,
+            replace_dict=replace_dict,
             min_len=min_len,
         )
 
