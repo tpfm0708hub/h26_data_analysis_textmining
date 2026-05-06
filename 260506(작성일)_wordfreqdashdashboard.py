@@ -1,5 +1,4 @@
 import os
-import sys
 import importlib.util
 
 import pandas as pd
@@ -404,34 +403,99 @@ st.dataframe(replace_rule_df, use_container_width=True)
 # =========================================================
 st.subheader("5. 형태소 분석 실행")
 
-run_btn = st.button("형태소 분석 실행", type="primary")
+btn_col1, btn_col2 = st.columns([1, 1])
 
-if not run_btn:
+with btn_col1:
+    run_btn = st.button("형태소 분석 실행", type="primary")
+
+with btn_col2:
+    reset_btn = st.button("분석 결과 초기화")
+
+
+# =========================================================
+# 20. 분석 결과 초기화
+# =========================================================
+if reset_btn:
+    if "analysis_result" in st.session_state:
+        del st.session_state["analysis_result"]
+
+    if "analysis_config" in st.session_state:
+        del st.session_state["analysis_config"]
+
+    st.success("저장된 분석 결과가 초기화되었습니다.")
+    st.stop()
+
+
+# =========================================================
+# 21. 현재 분석 조건 저장
+# =========================================================
+current_analysis_config = {
+    "current_file_name": current_file_name,
+    "selected_columns": selected_columns,
+    "analyzer_name": analyzer_name,
+    "selected_pos_kor": selected_pos_kor,
+    "stop_words": stop_words,
+    "replace_dict": replace_dict,
+    "min_len": min_len,
+    "top_n": top_n,
+}
+
+
+# =========================================================
+# 22. 형태소 분석 실행
+# =========================================================
+if run_btn:
+    try:
+        with st.spinner("형태소 분석을 진행하고 있습니다."):
+            analysis_result = cached_text_analysis(
+                df=df,
+                selected_columns=selected_columns,
+                analyzer_name=analyzer_name,
+                selected_pos_kor=selected_pos_kor,
+                stop_words=stop_words,
+                replace_dict=replace_dict,
+                min_len=min_len,
+                top_n=top_n,
+            )
+
+        st.session_state["analysis_result"] = analysis_result
+        st.session_state["analysis_config"] = current_analysis_config
+
+        st.success("형태소 분석이 완료되었습니다.")
+
+    except Exception as e:
+        st.error(f"형태소 분석 중 오류가 발생했습니다: {e}")
+        st.stop()
+
+
+# =========================================================
+# 23. 저장된 분석 결과 확인
+# =========================================================
+if "analysis_result" not in st.session_state:
     st.info("설정을 완료한 뒤 [형태소 분석 실행] 버튼을 눌러주세요.")
     st.stop()
 
 
 # =========================================================
-# 20. 형태소 분석 실행
+# 24. 분석 조건 변경 여부 확인
 # =========================================================
-try:
-    with st.spinner("형태소 분석을 진행하고 있습니다."):
-        analysis_result = cached_text_analysis(
-            df=df,
-            selected_columns=selected_columns,
-            analyzer_name=analyzer_name,
-            selected_pos_kor=selected_pos_kor,
-            stop_words=stop_words,
-            replace_dict=replace_dict,
-            min_len=min_len,
-            top_n=top_n,
-        )
+saved_analysis_config = st.session_state.get("analysis_config")
 
-except Exception as e:
-    st.error(f"형태소 분석 중 오류가 발생했습니다: {e}")
-    st.stop()
+if saved_analysis_config != current_analysis_config:
+    st.warning(
+        "분석 조건이 변경되었습니다. 변경된 조건을 반영하려면 [형태소 분석 실행] 버튼을 다시 눌러주세요."
+    )
 
 
+# =========================================================
+# 25. 저장된 분석 결과 불러오기
+# =========================================================
+analysis_result = st.session_state["analysis_result"]
+
+
+# =========================================================
+# 26. 분석 결과 객체 분리
+# =========================================================
 freq_df = analysis_result["freq_df"]
 counter = analysis_result["counter"]
 result_df = analysis_result["result_df"]
@@ -440,7 +504,7 @@ unique_token_count = analysis_result["unique_token_count"]
 
 
 # =========================================================
-# 21. 분석 요약
+# 27. 분석 요약
 # =========================================================
 st.subheader("6. 분석 요약")
 
@@ -460,7 +524,7 @@ with sum_col4:
 
 
 # =========================================================
-# 22. 빈도분석 결과표
+# 28. 빈도분석 결과표
 # =========================================================
 st.subheader("7. 형태소 빈도분석 결과")
 
@@ -481,7 +545,7 @@ st.download_button(
 
 
 # =========================================================
-# 23. 시각화 출력 및 이미지 다운로드
+# 29. 시각화 출력 및 이미지 다운로드
 # =========================================================
 st.subheader("8. 시각화 결과")
 
@@ -531,7 +595,7 @@ with tab2:
 
 
 # =========================================================
-# 24. 토큰화 결과 데이터 확인
+# 30. 토큰화 결과 데이터 확인
 # =========================================================
 st.subheader("9. 토큰화 결과 데이터")
 
@@ -545,7 +609,7 @@ st.dataframe(
 token_csv = result_df.to_csv(index=False, encoding="utf-8-sig")
 
 st.download_button(
-    label="토큰화 결과 CSV 다운로드",
+    label="CSV 다운로드",
     data=token_csv,
     file_name="tokenized_result.csv",
     mime="text/csv"
