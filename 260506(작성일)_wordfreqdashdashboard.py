@@ -39,8 +39,8 @@ def load_module_from_path(module_alias, file_path):
 # =========================================================
 # 2. 사용자 정의 모듈 로딩
 # =========================================================
-TEXT_ANALYZER_PATH = os.path.join(MYLIB_DIR, "260506_myTextAnalyzer.py")
-VISUALIZER_PATH = os.path.join(MYLIB_DIR, "260506_myStramlitVisualizer.py")
+TEXT_ANALYZER_PATH = os.path.join(MYLIB_DIR, "260506(작성일)_myTextAnalyzer.py")
+VISUALIZER_PATH = os.path.join(MYLIB_DIR, "260506(작성일)_myStramlitVisualizer.py")
 
 myTextAnalyzer = load_module_from_path(
     module_alias="myTextAnalyzer_260506",
