@@ -15,7 +15,7 @@ import streamlit as st
 # 0. 기본 경로 설정
 # =========================================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CRAWLER_PATH = os.path.join(BASE_DIR, "260506_naver_api_crawler.py")
+CRAWLER_PATH = os.path.join(BASE_DIR, "260506(작성일)_naver_api_crawler.py")
 
 # API 키 저장 파일명에도 날짜 접두어 260506_ 반영
 API_KEY_FILE_PATH = os.path.join(BASE_DIR, "260506_naver_api_key_xor.dat")
