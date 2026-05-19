@@ -76,9 +76,12 @@ class DataManager:
 # =========================================================
 class TextAnalyzerService:
     def __init__(self, analyzer_module):
+        # 모듈 레벨의 래퍼(Wrapper) 함수
         self.run_text_analysis = analyzer_module.run_text_analysis
-        self.parse_stopwords = analyzer_module.parse_stopwords
-        self.parse_replace_rules = analyzer_module.parse_replace_rules
+        
+        # RuleParser 클래스를 명시적으로 참조하여 함수 연결
+        self.parse_stopwords = analyzer_module.RuleParser.parse_stopwords
+        self.parse_replace_rules = analyzer_module.RuleParser.parse_replace_rules
 
     @st.cache_data(show_spinner=True)
     def analyze(_self, df, config):
@@ -100,9 +103,15 @@ class TextAnalyzerService:
 # =========================================================
 class UIManager:
     def __init__(self, visualizer_module):
-        self.draw_hbar = visualizer_module.draw_hbar
-        self.draw_wordcloud = visualizer_module.draw_wordcloud
-        self.fig_to_png_bytes = visualizer_module.fig_to_png_bytes
+        # 의존성 주입: 폰트 경로를 넘겨주어 TextVisualizer 인스턴스 생성
+        self.visualizer = visualizer_module.TextVisualizer(font_path=SystemSetup.FONT_PATH)
+        
+        # 인스턴스 메서드 연결
+        self.draw_hbar = self.visualizer.draw_hbar
+        self.draw_wordcloud = self.visualizer.draw_wordcloud
+        
+        # 정적(static) 메서드 연결
+        self.fig_to_png_bytes = visualizer_module.TextVisualizer.fig_to_png_bytes
 
     @staticmethod
     def render_header():
@@ -191,7 +200,7 @@ class UIManager:
             st.pyplot(fig_bar)
             st.download_button("막대그래프 다운로드", data=self.fig_to_png_bytes(fig_bar), file_name="bargraph.png", mime="image/png")
         with tab2:
-            fig_wc = self.draw_wordcloud(counter=counter, font_path=SystemSetup.FONT_PATH, max_words=config["top_n"], background_color="ivory")
+            fig_wc = self.draw_wordcloud(counter=counter, max_words=config["top_n"], background_color="ivory")
             st.pyplot(fig_wc)
             st.download_button("워드클라우드 다운로드", data=self.fig_to_png_bytes(fig_wc), file_name="wordcloud.png", mime="image/png")
 
